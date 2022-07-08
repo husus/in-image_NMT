@@ -1,35 +1,14 @@
 from PIL import Image, ImageFont, ImageDraw
 import pandas as pd
-import numpy as np
 import os
-import easyocr
 import random
 
-FOLDER_PATH = '/OCR_NMT/'
-IMG_PATH = 'data/images/'
-TEXT_PATH = 'data/captions.txt'
+FOLDER_PATH = os.path.join(os.getcwd(),'OCR_NMT')
+IMG_PATH = os.path.join(os.getcwd(),'data','images')
+TEXT_PATH = os.path.join(os.getcwd(),'data','captions.txt')
+FONT_PATH = os.path.join(os.getcwd(),'fonts')
 
-def clean_data():
-    # upload the textual dataset
-    df = pd.read_csv(TEXT_PATH)
-
-    # remove rows with one-letter caption
-    df = df[df['caption'].str.len()!= 1]
-
-    # keep only one caption per image based on the number of words
-    # (in the original dataset, there are 4 captions per image)
-    df['num_words'] = df['caption'].str.split().str.len()
-    df = df.groupby('image', group_keys=False).apply(lambda x: x.loc[x['num_words'].idxmin()])
-    df = df.drop('image', axis=1).reset_index()
-
-    return df
-
-data = clean_data()
-img_list = data['image'].to_list()
-# subset_img = data['image'].sample(300)
-# subset_img.to_csv(FOLDER_PATH+'data/subset.txt', index=False, header=False)
-subset_img = pd.read_csv('data/subset.txt', header=None)[0].to_list()
-font_list = os.listdir('/Users/Susan/Desktop/OCR_NMT/fonts')
+font_list = os.listdir(FONT_PATH)
 color_list = [
     (255,0,0), #white
     (0,0,0), #black
@@ -44,35 +23,73 @@ color_list = [
     (255,132,0) #tangerine
 ]
 
-### Copy images in subset folder ###
-# import shutil
+def clean_text_data():
+    # upload the textual dataset
+    df = pd.read_csv(TEXT_PATH)
 
-# dest_dir = '/Users/Susan/Desktop/OCR_NMT/data/subset'
-# for f in subset_img:
-#     path = '/Users/Susan/Desktop/OCR_NMT/data/images/' + f
-#     shutil.copy(path, dest_dir)
-####################################
+    # remove rows with one-letter caption
+    df = df[df['caption'].str.len()!= 1]
+
+    # remove extra characters for each caption, space and dot
+    df['caption'] = df['caption'].apply(lambda x: x[:-2])
+
+    # keep only one caption per image based on the number of words
+    # (in the original dataset, there are 4 captions per image)
+    df['num_words'] = df['caption'].str.split().str.len()
+    df = df.groupby('image', group_keys=False).apply(lambda x: x.loc[x['num_words'].idxmin()])
+    df = df.drop('image', axis=1).reset_index()
+
+    return df
 
 
-for f in subset_img: #img_list: 
-    img = Image.open(IMG_PATH+f)
-    # img = Image.open(FOLDER_PATH+IMG_PATH+'3415578043_03d33e6efd.jpg')
-    W, H = img.size
-    text = data[data['image']==f]['caption'].values[0][:-2] #leave out final space and dot
-    # text = data[data['image']=='3415578043_03d33e6efd.jpg']['caption'].values[0]
-    color = random.choice(color_list)
-    font = random.choice(font_list)
-    text_font = ImageFont.truetype(FOLDER_PATH+'fonts/'+font, 20)
-    draw = ImageDraw.Draw(img)
-    w, h = draw.textsize(text, font=text_font)
-    
-    if w > W :
-        c = text.count(" ")
-        s = text.split(" ")
-        s.insert(round(c/2), '\n')
-        text = " ".join(s)
+def create_text_img(data, images, path):
+    '''
+    This function adds the text (after being formatted) on the images 
+    and saves them in the desired path.
+    Arguments:
+        data: dataframe containing the text captions to be added on the images
+        images: list of image names to be modified
+        path: foder path where the created images will be saved
+    '''
+    for f in images:  
+        img = Image.open(os.path.join(IMG_PATH,f))
+        W, H = img.size
+        text = data[data['image']==f]['caption'].values[0]
+        color = random.choice(color_list)
+        font = random.choice(font_list)
+        text_font = ImageFont.truetype(os.path.join(FONT_PATH, font), 20)
+        draw = ImageDraw.Draw(img)
         w, h = draw.textsize(text, font=text_font)
+        
+        if w > W :
+            # when the text length is wider than the image width, split the text in two lines
+            c = text.count(" ")
+            s = text.split(" ")
+            s.insert(c//2 + 1, '\n')
+            text = " ".join(s)
+            w, h = draw.textsize(text, font=text_font)
 
+        coord = random_coord(W,H,w,h)
+
+        if random.random() > 0.5:
+            text = str.upper(text)
+
+        draw.text(coord, text, color, font=text_font)
+
+        path_to_save = os.path.join(path, f)
+        img.save(path_to_save, 'JPEG')
+
+
+def random_coord(W,H,w,h):
+    '''
+    This function randomly choose the coordinates (x,y) of 
+    where the text will be positioned in the image.
+    Arguments:
+        W: width of the image 
+        H: height of the image
+        w: total width of the text
+        h: total height of the text
+    '''
     pos_list = [
         ((W-w)/2,(H-h)/2), #center
         (10,(H-h)/2), #center-left
@@ -84,29 +101,30 @@ for f in subset_img: #img_list:
         (10, H-h), #bottom-left
         (W-w, H-h) #bottom-left
     ]
-    coord = random.choice(pos_list)
 
-    if random.random() > 0.5:
-        draw.text(coord, str.upper(text), color, font=text_font)
-    else:    
-        draw.text(coord, text, color, font=text_font)
+    return random.choice(pos_list)
 
-    img
 
-img_name = '2387197355_237f6f41ee.jpg'
-img = Image.open(FOLDER_PATH+IMG_PATH+img_name)
-W, H = img.size
-text = data[data['image']==img_name]['caption'].values[0]
-text_font = ImageFont.truetype('fonts/RobotoMono-Italic-VariableFont_wght.ttf', 20)
-img_editable = ImageDraw.Draw(img)
-w, h = img_editable.textsize(text, font=text_font)
-img_editable.text(((W-w)/2,(H-h)/2), text, (0, 255, 255), font=text_font)
-img
 
-reader = easyocr.Reader(['en'])
-result = reader.readtext(img)
-words = []
-for i in result: 
-    words.append(i[1])
-" ".join(words)
-print(words)
+
+if __name__ == '__main__':
+    data = clean_text_data()
+    img_list = data['image'].to_list()
+
+    ### [TEMP] Copy images in subset folder ###
+    # import shutil
+
+    # dest_dir = '/Users/Susan/Desktop/OCR_NMT/data/subset'
+    # for f in subset_img:
+    #     path = '/Users/Susan/Desktop/OCR_NMT/data/images/' + f
+    #     shutil.copy(path, dest_dir)
+    ########################################### 
+
+    ###### [TEMP] Create subset img for test ######
+    # subset_img = data['image'].sample(300)
+    # subset_img.to_csv(FOLDER_PATH+'data/subset.txt', index=False, header=False)
+    subset_img = pd.read_csv('data/subset.txt', header=None)[0].to_list()
+    ###############################################
+
+    path = os.path.join(FOLDER_PATH, 'data', 'sub_img')
+    create_text_img(data, subset_img, path)
