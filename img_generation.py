@@ -3,12 +3,13 @@ import pandas as pd
 import os
 import random
 
-FOLDER_PATH = os.path.join(os.getcwd(),'OCR_NMT')
-IMG_PATH = os.path.join(os.getcwd(),'data','images')
-TEXT_PATH = os.path.join(os.getcwd(),'data','captions.txt')
+FOLDER_PATH = os.path.join(os.getcwd(), 'data')
+IMG_PATH = os.path.join(FOLDER_PATH, 'images')
+TEXT_PATH = os.path.join(FOLDER_PATH, 'captions.txt')
 FONT_PATH = os.path.join(os.getcwd(),'fonts')
 
 font_list = os.listdir(FONT_PATH)
+font_list = [i for i in font_list if i != '.DS_Store'] # to remove '.DS_Store' file automatically generated on MacOS
 color_list = [
     (255,0,0), #white
     (0,0,0), #black
@@ -57,7 +58,7 @@ def create_text_img(data, images, path):
         text = data[data['image']==f]['caption'].values[0]
         color = random.choice(color_list)
         font = random.choice(font_list)
-        text_font = ImageFont.truetype(os.path.join(FONT_PATH, font), 20)
+        text_font = ImageFont.truetype(os.path.join(FONT_PATH, font), size=24)
         draw = ImageDraw.Draw(img)
         w, h = draw.textsize(text, font=text_font)
         
@@ -104,6 +105,11 @@ def random_coord(W,H,w,h):
 
     return random.choice(pos_list)
 
+# TODO:
+# - change logic for the text positioning. If central position, wrap the long text etc
+# - delete already generated images in sub_img folder
+# - change position coordinates: keep only those starting on left-side (top, center)
+
 
 
 
@@ -126,5 +132,5 @@ if __name__ == '__main__':
     subset_img = pd.read_csv('data/subset.txt', header=None)[0].to_list()
     ###############################################
 
-    path = os.path.join(FOLDER_PATH, 'data', 'sub_img')
+    path = os.path.join(FOLDER_PATH, 'sub_img')
     create_text_img(data, subset_img, path)
