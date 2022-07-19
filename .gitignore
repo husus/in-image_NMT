@@ -1,5 +1,6 @@
 data/images
-data/subset
+data/raw
+data/subset_raw
 data/sub_img
 trial_pic/
 Adding_Text_on_Image_using_Python_by_BehicGuven_TowardsDataScience.pdf
